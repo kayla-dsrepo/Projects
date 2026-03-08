@@ -1,20 +1,20 @@
 # Web Interface
-streamlit==1.32.0
+streamlit
 
 # Data Processing
-pandas==2.2.0
+pandas
 
 # AI Framework & Orchestration
-langchain==0.1.12
-langchain-community==0.0.28
-langchain-huggingface==0.0.1
+langchain
+langchain-community
+langchain-huggingface
 
 # Vector Database
-chromadb==0.4.24
+chromadb
 
-# Embeddings & Transformers
-sentence-transformers==2.5.1
-torch==2.2.1
+# Embeddings & Transformers 
+sentence-transformers
+torch
 
 # Local LLM Connector
-ollama==0.1.7
+ollama
