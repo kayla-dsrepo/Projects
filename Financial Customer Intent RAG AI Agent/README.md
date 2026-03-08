@@ -21,7 +21,7 @@ This application functions as a **Semantic "Second Opinion" layer**. It identifi
 ![Memory Trainer](assets/Train_The_AI.png)
 
 #### 4. System Knowledge Overview
-![Memory Trainer](assets/System Health.png)
+![System Health](assets/System_Health.png)
 
 ---
 
