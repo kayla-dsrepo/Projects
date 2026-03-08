@@ -1,0 +1,11 @@
+,index,input,output
+0,0.0,Could you please help me reset my account password?,password_reset
+1,1.0,What company charged my account last?,transaction_query
+2,2.0,How do I schedule an appointment to discuss loan options and apply?,loan_inquiry
+3,6.0,yall better call me now,fraud_report
+4,19.0,Can you provide instructions for uploading documents to the application portal?,credi_card_application
+5,58.0,I??e refreshed a million times??AVINGS BALANCE STAT!,balance_inquiry
+0,,I want to buy 100 shares of apple,trading
+1,,How much can I put in my 401k?,retirement
+2,,Where is my 1099 form?,tax
+3,,What is the weather like in Boston?,irrelevant

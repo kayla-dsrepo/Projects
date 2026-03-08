@@ -1,169 +1,181 @@
-import streamlit as st
-import pandas as pd
-import os
-from langchain_community.vectorstores import Chroma
-from langchain_huggingface import HuggingFaceEmbeddings
-from langchain_core.prompts import FewShotPromptTemplate, PromptTemplate
-from langchain_core.example_selectors import SemanticSimilarityExampleSelector
-from langchain_community.llms import Ollama
+import streamlit as st # Web interface framework
+import pandas as pd # Data manipulation and CSV handling
+import os # File and directory operations
+from langchain_community.vectorstores import Chroma # Local vector database interface
+from langchain_huggingface import HuggingFaceEmbeddings # Text-to-vector transformation model
+from langchain_community.llms import Ollama # Local LLM (Llama-3) connector
 
 # ====================================================================
-# Logic Layer: Semantic Router with Dynamic Few-Shot Learning
+# Logic Layer: The Semantic Agent
 # ====================================================================
 
-class SemanticFidelityRouter:
-    """Handles classification using a vector-memory of past examples."""
+class SemanticIntentAgent:
+    """Agent that uses vector memory to reclassify financial intents."""
     
-    def __init__(self):
-        # 1. Initialize local embedding model (runs on your CPU)
+    def __init__(self, db_path="agent_memory_db"):
+        # Store the path to your existing vector database
+        self.db_path = db_path 
+        
+        # Load the embedding model to ensure the math matches your stored data
         self.embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
         
-        # 2. Initial "Seed" Examples (The Memory)
-        self.initial_examples = [
-            {"input": "I need to reset my password", "output": "Service"},
-            {"input": "I want to buy 100 shares of apple", "output": "Trading"},
-            {"input": "How much can I put in my 401k?", "output": "Retirement"},
-            {"input": "Where is my 1099 form?", "output": "Tax"},
-            {"input": "What is the weather like in Boston?", "output": "Irrelevant"}
-        ]
-        
-        # 3. Initialize Vector Store (Persistent Memory)
+        # Connect to the persistent ChromaDB folder
         self.vectorstore = Chroma(
-            persist_directory="./fidelity_vector_db",
+            persist_directory=self.db_path,
             embedding_function=self.embeddings,
             collection_name="intent_memory"
         )
         
-        # Seed the DB if it's empty
-        if self.vectorstore._collection.count() == 0:
-            self._seed_db()
-
-        # 4. Setup Local LLM (Llama 3 via Ollama)
+        # Initialize the local LLM instance
         self.llm = Ollama(model="llama3")
 
-    def _seed_db(self):
-        for ex in self.initial_examples:
-            self.add_new_example(ex['input'], ex['output'])
+    def get_unique_categories(self):
+        """Retrieves all distinct categories currently stored in the vector database."""
+        # Access the underlying collection metadata to find unique labels
+        data = self.vectorstore.get()
+        if data and 'metadatas' in data:
+            return list(set(m['output'] for m in data['metadatas']))
+        return []
 
-    def add_new_example(self, text, department):
-        """Saves a new correct classification to the vector memory."""
-        self.vectorstore.add_texts(
-            texts=[text],
-            metadatas=[{"output": department}]
-        )
-
-    def predict_department(self, query):
-        """Retrieves similar examples and uses Few-Shot prompting to classify."""
+    def predict_intent(self, user_query):
+        """Retrieves similar cases and asks Llama-3 for a final decision."""
         
-        # Retrieve the top 3 most similar examples from memory
-        similar_docs = self.vectorstore.similarity_search(query, k=3)
+        # Search: Find the top 3 most semantically similar examples
+        similar_examples = self.vectorstore.similarity_search(user_query, k=3)
         
-        # Format examples for the prompt
+        # Context Building: Format retrieved examples into a string
         example_context = ""
-        for doc in similar_docs:
-            example_context += f"Input: {doc.page_content}\nOutput: {doc.metadata['output']}\n\n"
+        for doc in similar_examples:
+            example_context += f"Example Input: {doc.page_content}\nCorrect Category: {doc.metadata['output']}\n\n"
 
-        prompt = f"""
-        You are a Fidelity Investments routing specialist. 
-        Classify the input into: Trading, Retirement, Service, Tax, or Irrelevant.
+        # Prompting: Construct the instruction set with historical context
+        full_prompt = f"""
+        You are a Financial Services Routing Agent.
+        Use the following historical examples to categorize the new inquiry.
 
-        ### Past Examples for Context:
+        ### Historical Context:
         {example_context}
 
-        ### New Task:
-        Input: {query}
-        Output: (Return ONLY the department name)
+        ### New Inquiry to Classify:
+        {user_query}
+
+        Instructions: Return ONLY the exact category name.
         """
         
-        response = self.llm.invoke(prompt).strip()
-        # Clean up the response to ensure it matches your categories
-        categories = ["Trading", "Retirement", "Service", "Tax", "Irrelevant"]
-        for cat in categories:
-            if cat.lower() in response.lower():
-                return cat
-        return "Irrelevant"
+        # Generation: Send the prompt to the LLM
+        response = self.llm.invoke(full_prompt).strip()
+        return response
+
+    def update_memory(self, text, category):
+        """Adds a new successful classification to the vector database."""
+        self.vectorstore.add_texts(
+            texts=[text],
+            metadatas=[{"output": category}]
+        )
 
 # ====================================================================
-# Processor Layer
+# Processing Layer: Bulk Handling
 # ====================================================================
 
-class DataFrameProcessor:
-    def __init__(self, router):
-        self.router = router
+class IntentProcessor:
+    def __init__(self, agent):
+        self.agent = agent 
 
-    def process_dataframe(self, df, threshold):
+    def run_reclassification(self, df, threshold):
+        """Iterates through a dataframe to fix low-confidence errors."""
         try:
-            required_cols = ['customer_statement', 'department_routed', 'confidence_level']
-            if not all(col in df.columns for col in required_cols):
-                return None, "Error: Missing required columns."
+            results = []
+            statuses = []
 
-            final_depts = []
-            status = []
-
-            for _, row in df.iterrows():
-                conf = float(row['confidence_level'])
-                if conf < threshold:
-                    # Logic Recovery via Semantic RAG
-                    prediction = self.router.predict_department(row['customer_statement'])
-                    final_depts.append(prediction)
-                    status.append(f"Reclassified (Semantic Memory)")
+            for index, row in df.iterrows():
+                # Trigger RAG prediction if confidence is below threshold
+                if float(row['confidence_level']) < threshold:
+                    new_intent = self.agent.predict_intent(row['customer_statement'])
+                    results.append(new_intent)
+                    statuses.append("Reclassified (Semantic RAG)")
                 else:
-                    final_depts.append(row['department_routed'])
-                    status.append("Original")
+                    results.append(row['department_routed'])
+                    statuses.append("Original (High Confidence)")
 
-            df['final_classification'] = final_depts
-            df['processing_status'] = status
-            return df, "success"
+            df['final_intent'] = results
+            df['audit_status'] = statuses
+            return df, "Success"
         except Exception as e:
             return None, str(e)
 
 # ====================================================================
-# Streamlit UI
+# Application Layer: Streamlit UI
 # ====================================================================
 
 def main():
-    st.set_page_config(page_title="Semantic Intent Re-router", layout="wide")
+    # Set the specific page title requested
+    st.set_page_config(page_title="Customer Intent Re-Classification AI Agent", layout="wide")
 
-    if 'router' not in st.session_state:
-        st.session_state.router = SemanticFidelityRouter()
-    
+    # Persistent Session State
+    if 'agent' not in st.session_state:
+        st.session_state.agent = SemanticIntentAgent()
     if 'processor' not in st.session_state:
-        st.session_state.processor = DataFrameProcessor(st.session_state.router)
+        st.session_state.processor = IntentProcessor(st.session_state.agent)
 
-    st.sidebar.title("Navigation")
-    option = st.sidebar.radio("Go to:", ["1. Bulk Reclassification", "2. Train the Memory", "3. About"])
+    # Navigation
+    st.sidebar.title("Agent Controls")
+    nav = st.sidebar.radio("Select Task", ["Bulk Audit", "Memory Trainer", "Database Stats"])
 
-    if option == "1. Bulk Reclassification":
-        st.title("📂 Semantic Logic Recovery")
-        threshold = st.slider("Low-Confidence Threshold", 0.0, 1.0, 0.6)
+    if nav == "Bulk Audit":
+        st.title("Bulk Audit and Re-Classification")
+        st.info("System evaluating vendor confidence against local semantic memory.")
         
-        uploaded_file = st.file_uploader("Upload Vendor CSV", type=["csv"])
+        threshold = st.slider("Confidence Threshold", 0.0, 1.0, 0.60)
+        uploaded_file = st.file_uploader("Upload Vendor Results (CSV)", type="csv")
+        
         if uploaded_file:
-            df = pd.read_csv(uploaded_file)
-            if st.button("Run Semantic Re-router"):
-                with st.spinner("Retrieving similar cases from memory and re-classifying..."):
-                    result, msg = st.session_state.processor.process_dataframe(df, threshold)
-                    if result is not None:
-                        st.dataframe(result)
+            data = pd.read_csv(uploaded_file)
+            if st.button("Start AI Re-classification"):
+                with st.spinner("Analyzing narratives..."):
+                    processed_df, msg = st.session_state.processor.run_reclassification(data, threshold)
+                    if processed_df is not None:
+                        st.success("Analysis complete.")
+                        st.dataframe(processed_df)
                     else:
                         st.error(msg)
 
-    elif option == "2. Train the Memory":
-        st.title("🧠 Supervisor Training Interface")
-        st.write("Instead of keywords, provide a full sentence example to improve the model's 'Memory'.")
+    elif nav == "Memory Trainer":
+        st.title("Train Agent Memory")
         
-        with st.form("training_form"):
-            example_text = st.text_input("Customer Statement Example:")
-            correct_dept = st.selectbox("Correct Department:", ["Trading", "Retirement", "Service", "Tax", "Irrelevant"])
-            submitted = st.form_submit_button("Add to Semantic Memory")
-            
-            if submitted and example_text:
-                st.session_state.router.add_new_example(example_text, correct_dept)
-                st.success(f"Added to Vector Store! The system now knows that '{example_text}' belongs to {correct_dept}.")
+        # Define the requested initial categories
+        base_categories = [
+            "password_reset", "transaction_query", "loan_inquiry", "fraud_report", 
+            "credi_card_application", "balance_inquiry", "trading", "retirement", 
+            "tax", "irrelevant"
+        ]
+        
+        # Fetch existing categories from the DB and merge with base list
+        db_categories = st.session_state.agent.get_unique_categories()
+        full_cat_list = sorted(list(set(base_categories + db_categories)))
 
-    elif option == "3. About":
-        st.title("LangChain-Powered Intent Routing")
-        st.info("This version uses **Vector Search (ChromaDB)** and **Few-Shot Prompting (Llama 3)** to recover logic from low-confidence predictions.")
+        with st.form("train_form"):
+            new_text = st.text_area("Customer Statement:")
+            
+            # Category selection including existing and custom ones
+            selected_cat = st.selectbox("Correct Category:", full_cat_list)
+            
+            # Allow user to add a brand new category
+            custom_cat = st.text_input("OR Add New Category (Leave blank to use selection):")
+            
+            if st.form_submit_button("Inject into Memory"):
+                final_cat = custom_cat.strip() if custom_cat else selected_cat
+                if new_text and final_cat:
+                    st.session_state.agent.update_memory(new_text, final_cat)
+                    st.success(f"Example saved under category: {final_cat}")
+                    st.rerun()
+
+    elif nav == "Database Stats":
+        st.title("Database Overview")
+        count = st.session_state.agent.vectorstore._collection.count()
+        st.metric("Total Learned Examples", count)
+        
+        st.subheader("Current Active Categories")
+        st.write(st.session_state.agent.get_unique_categories())
 
 if __name__ == "__main__":
     main()
