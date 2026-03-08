@@ -78,12 +78,12 @@ class SemanticIntentAgent:
                 # 3. CLOUD FALLBACK (MOCK MODE)
                 # If Ollama is unreachable, we use 'Nearest Neighbor' logic.
                 # We return the category of the #1 most similar example in memory.
-                if similar_examples:
-                    # Get the metadata from the top result
-                    fallback_category = similar_examples[0].metadata['output']
-                    return fallback_category
+                # if similar_examples:
+                #     # Get the metadata from the top result
+                #     fallback_category = similar_examples[0].metadata['output']
+                #     return fallback_category
                 
-                # If the database is completely empty, return 'irrelevant'
+                # # If the database is completely empty, return 'irrelevant'
                 return "mock_mode_label"
 
 
