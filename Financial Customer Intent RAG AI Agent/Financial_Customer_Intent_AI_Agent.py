@@ -37,35 +37,55 @@ class SemanticIntentAgent:
         return []
 
     def predict_intent(self, user_query):
-        """Retrieves similar cases and generates a classification via Llama-3."""
-        
-        # Finds the 3 most similar past cases to the current customer query
-        similar_examples = self.vectorstore.similarity_search(user_query, k=3)
-        
-        # Prepares a reference context for the AI based on those past cases
-        example_context = ""
-        for doc in similar_examples:
-            example_context += f"Example Input: {doc.page_content}\nCorrect Category: {doc.metadata['output']}\n\n"
+            """
+            Retrieves similar cases and generates a classification via Llama-3.
+            Includes a fallback 'Mock Mode' for cloud deployment environments.
+            """
+            
+            # 1. SEMANTIC RETRIEVAL: Find the 3 most similar past cases in ChromaDB
+            # This part works both locally and in the cloud if the DB is uploaded.
+            similar_examples = self.vectorstore.similarity_search(user_query, k=3)
+            
+            # 2. ATTEMPT AI GENERATION (Llama-3)
+            try:
+                # Prepare the reference context for the AI based on those past cases
+                example_context = ""
+                for doc in similar_examples:
+                    example_context += f"Example Input: {doc.page_content}\nCorrect Category: {doc.metadata['output']}\n\n"
 
-        # Directives for the AI to ensure consistent labeling
-        full_prompt = f"""
-        You are a Financial Services Routing Agent.
-        Use the following historical examples to categorize the new inquiry.
+                # Directives for the AI to ensure consistent labeling
+                full_prompt = f"""
+                You are a Financial Services Routing Agent.
+                Use the following historical examples to categorize the new inquiry.
 
-        ### Historical Context:
-        {example_context}
+                ### Historical Context:
+                {example_context}
 
-        ### New Inquiry to Classify:
-        {user_query}
+                ### New Inquiry to Classify:
+                {user_query}
 
-        ### Instructions:
-        1. Return ONLY the exact category name.
-        2. The category name should always be in lowercase, and words should be connected by an underscore.
-        3. Any irrelevant query should be labeled exactly as 'irrelevant', not 'non-financial' or other labels.
-        """
-        
-        response = self.llm.invoke(full_prompt).strip().lower()
-        return response
+                ### Instructions:
+                1. Return ONLY the exact category name.
+                2. The category name should always be in lowercase, and words should be connected by an underscore.
+                3. Any irrelevant query should be labeled exactly as 'irrelevant', not 'non-financial' or other labels.
+                """
+                
+                # Try to invoke the local Llama-3 model via Ollama
+                response = self.llm.invoke(full_prompt).strip().lower()
+                return response
+
+            except Exception:
+                # 3. CLOUD FALLBACK (MOCK MODE)
+                # If Ollama is unreachable, we use 'Nearest Neighbor' logic.
+                # We return the category of the #1 most similar example in memory.
+                if similar_examples:
+                    # Get the metadata from the top result
+                    fallback_category = similar_examples[0].metadata['output']
+                    return fallback_category
+                
+                # If the database is completely empty, return 'irrelevant'
+                return "irrelevant"
+
 
     def update_memory(self, text, category):
         """Adds a new successful classification to the vector database."""
