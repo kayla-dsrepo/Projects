@@ -6,6 +6,8 @@ The **Customer Intent Re-Classification AI Agent** is a sophisticated logic-reco
 
 This application functions as a **Semantic "Second Opinion" layer**. It identifies inquiries with low confidence scores and reapplies high-precision intelligence using a local **Retrieval-Augmented Generation (RAG)** pipeline. By comparing new queries against a "Semantic Memory" of successful historical cases, the agent ensures that every customer is connected to the correct specialist department while maintaining strict data privacy.
 
+The app is available at CustomerIntentReClassifierRAGAI.streamlit.app
+
 ---
 
 ### Visual Preview
