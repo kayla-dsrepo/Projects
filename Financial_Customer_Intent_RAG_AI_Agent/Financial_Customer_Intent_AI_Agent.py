@@ -84,7 +84,7 @@ class SemanticIntentAgent:
                     return fallback_category
                 
                 # If the database is completely empty, return 'irrelevant'
-                return "irrelevant"
+                return "mock_mode_label"
 
 
     def update_memory(self, text, category):
