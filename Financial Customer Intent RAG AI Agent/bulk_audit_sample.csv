@@ -1,0 +1,13 @@
+customer_statement,department_routed,confidence_level
+I forgot my login password and need a reset,password_reset,0.98
+Why was my $50 transfer to John Doe declined?,transaction_query,0.4
+I want to apply for a new mortgage for a house,loan_inquiry,0.89
+There is a weird charge on my card I didn't make,fraud_report,0.32
+How do I get a new gold credit card?,credi_card_application,0.55
+What is the current balance of my savings account?,balance_inquiry,0.92
+I need to buy 50 shares of Apple stock,trading,0.7
+Can I move money from my old 401k to a Roth IRA?,retirement,0.95
+I am looking for my 1099-INT form for last year,tax,0.38
+What is the best recipe for chocolate chip cookies?,irrelevant,0.9
+I want to increase my credit limit on my existing card,balance_inquiry,0.42
+Is the stock market open on Labor Day?,trading,0.6
