@@ -8,6 +8,23 @@ This application functions as a **Semantic "Second Opinion" layer**. It identifi
 
 ---
 
+### Visual Preview
+
+#### 1. Welcome & Support Interface
+![Welcome Page](assets/Welcome_Page.png)
+
+#### 2. Bulk Audit & AI Re-Classification
+![Bulk Audit](assets/Bulk_Audit_1.png)
+![Bulk Audit](assets/Bulk_Audit_2.png)
+
+#### 3. Semantic Memory Trainer
+![Memory Trainer](assets/Train_The_AI.png)
+
+#### 4. System Knowledge Overview
+![Memory Trainer](assets/System Health.png)
+
+---
+
 ### Key Features
 
 * **Semantic "Second Opinion" Logic:** Automatically intercepts data with low confidence scores and uses a local Llama-3 model to re-evaluate the intent based on meaning rather than just keywords.
